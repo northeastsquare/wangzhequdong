@@ -14,5 +14,6 @@
     "navigationBarBackgroundColor": "#3883FA",
     "navigationBarTitleText": "知识比拼",
     "navigationBarTextStyle": "white"
-  }
+  },
+  "sitemapLocation": "sitemap.json"
 }

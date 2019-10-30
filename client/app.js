@@ -49,7 +49,7 @@ App({
       if (openIdReadyCallback) {
         openIdReadyCallback(userInfo.openId)
       }
-    } else {
+    } else {//userinfo为空，还如下，应该有问题吧
       this.userInfoReadyCallback = (userInfo) => {  //获取用户信息后的回调函数
         page.setData({  //每个page都会自动存储userInfo和openId
           userInfo,

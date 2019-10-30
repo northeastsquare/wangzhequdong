@@ -18,13 +18,15 @@ const match = {//匹配对象：包含数据和函数
   queueData: [],
   init() {
     let finished = true
-	function match_succ(player1,player2){
-		//创建房间
-        match.createRoom(player1.openId, player2.openId)
-        //队列中删除匹配好的2个玩家
-        tools.deleteQueueOpenId(player1.openId)
-        tools.deleteQueueOpenId(player2.openId)
-	}
+    function match_succ(player1,player2){
+      //创建房间
+      //我感觉这里有问题，如果到这里就中断了，然后其他人又匹配，那么这两个人是否有在其中进行了匹配。
+      //匹配这里是单线程的，在一个定时任务里面，所以不存在这种情况。
+          match.createRoom(player1.openId, player2.openId)
+          //队列中删除匹配好的2个玩家
+          tools.deleteQueueOpenId(player1.openId)
+          tools.deleteQueueOpenId(player2.openId)
+    }
     const loopMatch = setInterval(() => {
       if (finished) {
         finished = false
@@ -32,7 +34,8 @@ const match = {//匹配对象：包含数据和函数
           let player1 = players[this.queueData[index1]]
 		  //排位赛匹配
           if (player1.friendsFightingRoom === undefined) {
-            for (let index2 = index1; index2 < this.queueData.length; index2++) {
+            //我觉得index2应该从index1+1开始呢
+            for (let index2 = index1+1; index2 < this.queueData.length; index2++) {
               let player2 = players[this.queueData[index2]]
               if (player2.friendsFightingRoom === undefined && player2.sortId === player1.sortId && Math.abs(player2.score - player1.score) < option.MAX_SCORE_GAP && player2.openId !== player1.openId) {
                 match_succ(player1,player2)
@@ -43,7 +46,8 @@ const match = {//匹配对象：包含数据和函数
           }
 		  //好友匹配
           if (player1.friendsFightingRoom !== undefined && player1.friendsFightingRoom !== null) {
-            for (let index2 = index1; index2 < this.queueData.length; index2++) {
+            //我以为还有对战，就是一个人把房间发给另一个好友，来对战，可是这里有queue,说明是与所有好友进行匹配
+            for (let index2 = index1+1; index2 < this.queueData.length; index2++) {
               let player2 = players[this.queueData[index2]]
               if (player2.friendsFightingRoom !== undefined && player2.friendsFightingRoom !== null && player2.friendsFightingRoom === player1.friendsFightingRoom && player2.openId !== player1.openId) {
                 this.match_succ(player1,player2)
@@ -71,6 +75,7 @@ const match = {//匹配对象：包含数据和函数
     players[openId2].roomName = roomName
     console.info('创建后的总房间和玩家为:', rooms, players)
     //library,默认包含5道题目
+    //为什么sort_id==1,就是所有的类别中选择题目
     mysql('question_detail').where((players[openId1].sortId == 1) ? {} : { sort_id: players[openId1].sortId }).select('*').orderByRaw('RAND()').limit(option.QUESTION_NUMBER).then(res => {
       rooms[roomName].library = res  //将查询到的题目存到房间的题库library中
       //房间创建完成后通知前端匹配完成
@@ -321,7 +326,7 @@ function onConnect(tunnelId) {
   })
   //PING-PONG机制:发送PING
   clearTimeout(players[tools.getPlayersOpenId(tunnelId)].timer)
-  tools.broadcast([tunnelId], 'PING', {})
+  tools.broadcast([tunnelId], 'PING', {})//为什么不启动定时器，监听timeout
 }
 
 /**
@@ -347,9 +352,10 @@ function onMessage(tunnelId, type, content) {
     case 'PONG': //PING-PONG机制:监听PONG
       if (tunnelId) {
         let openId = content.openId
-        clearTimeout(players[openId].timer)//清除掉定时器
+        clearTimeout(players[openId].timer)//清除掉定时器，是下面第二个定时器
+        //如果6秒内没有收到pong,那么下面第二定时器里面代码会执行。清空用户信息
 
-        let timer = setTimeout(() => {
+        let timer = setTimeout(() => {//确定要超时
           if (players[openId]) {
             //再次设置一个定时器
             players[openId].timer = setTimeout(() => {//ping-pong机制：监听客户端是否离线
@@ -368,7 +374,7 @@ function onMessage(tunnelId, type, content) {
     case 'updateMatchInfo':
       if (tunnelId) {
         let openId = content.openId
-        players[openId].sortId = content.sortId
+        players[openId].sortId = content.sortId//sortId,是题目类别
         players[openId].friendsFightingRoom = content.friendsFightingRoom
         console.info('更新用户匹配条件信息：', players[openId])
       }
@@ -384,7 +390,7 @@ function onMessage(tunnelId, type, content) {
         players[openId].choice[1] = content.choice.userChoose
         players[openId].choice[2] = content.choice.answerColor
         players[openId].choice[3] = content.choice.scoreMyself
-        if (rooms[roomName].responseNumber === 2) {
+        if (rooms[roomName].responseNumber === 2) {//感觉应该有地方把responseNumber给清零，否则这里有问题
           //当两位玩家都完成答题时，立刻向客户端发送下一题
           tools.sendQuestion(roomName)
         }
@@ -412,6 +418,7 @@ function onMessage(tunnelId, type, content) {
 }
 
 module.exports = {
+  //用户点击开始对战，进入下面get
   get: async ctx => {//响应用户开始进行websocket连接，信道服务器连接成功后通知客户端
     //data:{tunnel:{tunnelId:xxx,connectUrl:xxx},userinfo:{openId:xxx.nickName:xxx,...}}
     let data = await tunnel.getTunnelUrl(ctx.req)//当用户发起信道请求的时候，会得到信道信息和用户信息
