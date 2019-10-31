@@ -23,6 +23,7 @@ bower_components
 build/Release
 # Dependency directories
 node_modules/
+server/node_modules/
 jspm_packages/
 # Typescript v1 declaration files
 typings/
@@ -44,4 +45,4 @@ sh/
 # ignore test sdk.config.json
 sdk.config.json
 # ignore local config
-server/config.local.js
+#server/config.local.js

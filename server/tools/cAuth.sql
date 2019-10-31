@@ -23,6 +23,11 @@ SET time_zone = "+00:00";
 --
 
 -- --------------------------------------------------------
+CREATE Database `cAuth` DEFAULT CHARSET=utf8mb4;
+
+use cAuth;
+
+DROP TABLE IF EXISTS user;
 
 --
 -- 表的结构 `cSessionInfo`
