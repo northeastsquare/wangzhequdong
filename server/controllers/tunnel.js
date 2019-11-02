@@ -18,6 +18,23 @@ const match = {//匹配对象：包含数据和函数
   queueData: [],
   init() {
     let finished = true
+    function getFakeOpenId(id1, q){
+      while(true){
+        prefix = 'fake_'+ parseInt(Math.random()*100)
+        sid = prefix + id1.slice(prefix.length)
+        found = false
+        for (let index1 = 0; index1 < q.length; index1++) {
+          pid1 = players[q[index1]].openId
+          if (pid1 == sid){
+            found = true
+            break
+          }
+        }
+        if (found == false){
+          return sid
+        }
+      }
+    }
     function match_succ(player1,player2){
       //创建房间
       //我感觉这里有问题，如果到这里就中断了，然后其他人又匹配，那么这两个人是否有在其中进行了匹配。
@@ -28,23 +45,56 @@ const match = {//匹配对象：包含数据和函数
           tools.deleteQueueOpenId(player2.openId)
     }
     const loopMatch = setInterval(() => {
+      console.log("loopMatch interval"+finished+this.queueData.length)
+      console.log(this.queueData + "  " +players)
       if (finished) {
         finished = false
         for (let index1 = 0; index1 < this.queueData.length; index1++) {
           let player1 = players[this.queueData[index1]]
-		  //排位赛匹配
-          if (player1.friendsFightingRoom === undefined) {
+          //有可能被删掉了
+          console.log("player1:"+player1)
+          if(!player1){
+            continue
+          }
+          //排位赛匹配
+          console.log("player1.friendsFightingRoom:"+index1+" "+player1.friendsFightingRoom)
+          if (!player1.friendsFightingRoom) {
+            bsuccess = false
+            console.log("start match")
             //我觉得index2应该从index1+1开始呢
             for (let index2 = index1+1; index2 < this.queueData.length; index2++) {
               let player2 = players[this.queueData[index2]]
-              if (player2.friendsFightingRoom === undefined && player2.sortId === player1.sortId && Math.abs(player2.score - player1.score) < option.MAX_SCORE_GAP && player2.openId !== player1.openId) {
+              if (!player2.friendsFightingRoom && player2.sortId === player1.sortId && Math.abs(player2.score - player1.score) < option.MAX_SCORE_GAP && player2.openId !== player1.openId) {
                 match_succ(player1,player2)
-				//结束该player1的匹配
+                bsuccess = true
+				        //结束该player1的匹配
                 break
               }
             }
+            console.log("bsuccess:"+bsuccess)
+            //创建虚拟好友，与之对战
+            //openid, score, tunnelId, matchTime, roomName, friendsFightingRoom, sortId, choice,timer
+            if (player1.sortId && bsuccess == false){
+              fp = {}//fakePlayer
+              fp.openId = getFakeOpenId(player1.openId, this.queueData)
+              fp.score = 0
+              fp.tunnelId = null
+              fp.matchTime = new Date().getTime()
+              fp.roomName = null
+              fp.friendsFightingRoom = null
+              fp.sortId = null
+              fp.choice = [fp.openId, '', '', 0]
+              fp.nickName = 'fake'
+              fp.avatarUrl = 'https://qcloud.dpfile.com/pc/APSy1gCcglvKC_EeH-oQWP6GK_ZQ4MbQRQDnl3Zjl5Fdl2PSGM1_kJwSN2GQRCDrjoJrvItByyS4HHaWdXyO_I7F0UeCRQYMHlogzbt7GHgNNiIYVnHvzugZCuBITtvjski7YaLlHpkrQUr5euoQrg.jpg'
+              players[fp.openId] = fp
+              this.queueData.push(fp.openId)
+
+              console.log("fakeid:"+fp.openId)
+              match_succ(player1, fp)
+            }
           }
-		  //好友匹配
+          
+		      //好友匹配
           if (player1.friendsFightingRoom !== undefined && player1.friendsFightingRoom !== null) {
             //我以为还有对战，就是一个人把房间发给另一个好友，来对战，可是这里有queue,说明是与所有好友进行匹配
             for (let index2 = index1+1; index2 < this.queueData.length; index2++) {
@@ -79,7 +129,17 @@ const match = {//匹配对象：包含数据和函数
     mysql('question_detail').where((players[openId1].sortId == 1) ? {} : { sort_id: players[openId1].sortId }).select('*').orderByRaw('RAND()').limit(option.QUESTION_NUMBER).then(res => {
       rooms[roomName].library = res  //将查询到的题目存到房间的题库library中
       //房间创建完成后通知前端匹配完成
-      tools.broadcast([players[openId1].tunnelId, players[openId2].tunnelId], 'matchNotice', {
+      notifyId = []
+      if (openId1.slice(0,5) != 'fake_'){
+        console.log("1if:"+openId1+" tid:"+players[openId1].tunnelId)
+        notifyId.push(players[openId1].tunnelId)
+      }
+      if (openId2.slice(0,5) != 'fake_'){
+        notifyId.push(players[openId2].tunnelId)
+      }
+      console.log(notifyId)
+      console.log(openId1+"  "+openId2.slice(0,5)+"notifyid:"+notifyId+typeof(notifyId))
+      tools.broadcast(notifyId, 'matchNotice', {
         'player1': {
           openId: openId1,
           nickName: players[openId1].nickName,
@@ -108,7 +168,16 @@ const tools = {//工具对象，包含常用数据和函数
   },
   //广播到指定信道
   broadcast(tunnelIdsArray, type, content) {
-    tunnel.broadcast(tunnelIdsArray, type, content)
+    tarray = []
+    console.log("tunnelIdsArray:"+tunnelIdsArray)
+    tunnelIdsArray.forEach(
+      (sid)=>{
+        if (sid != ''&&sid){
+          tarray.push(sid)
+        }
+      }
+    )
+    tunnel.broadcast(tarray, type, content)
       .then(result => {
         const invalidTunnelIds = result.data && result.data.invalidTunnelIds || []
         if (invalidTunnelIds.length) {
@@ -424,6 +493,7 @@ module.exports = {
     let data = await tunnel.getTunnelUrl(ctx.req)//当用户发起信道请求的时候，会得到信道信息和用户信息
     let userinfo = data.userinfo
     let openId = userinfo.openId
+    console.log("get userinfo:"+userinfo)
     if (openId in players) {//如果已经存在openId,则说明只需更新信道ID
       players[openId].tunnelId = data.tunnel.tunnelId
       console.info('信道变化后的队列、玩家、房间和发题定时器为：', match.queueData, players, rooms, tools.data.timerSendQuestion)

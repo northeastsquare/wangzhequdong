@@ -26,7 +26,7 @@ function match(page, app, opt) {
 
   app.tunnelCloseCallback = () => {
     that.setData({ status: '连接已关闭' })
-    //util.showSuccess('连接已断开')
+    util.showSuccess('连接已断开')
   }
 
   app.tunnelReconnectCallback = () => {

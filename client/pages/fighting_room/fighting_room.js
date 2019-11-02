@@ -92,11 +92,13 @@ Page({
 		tunnel.on('sendQuestion', (res) => {
 			console.log('收到题目', res)
 			let question = res.question
+      //得到question的所有属性，求长度
 			if (Object.getOwnPropertyNames(question).length) {
 				question.answer = JSON.parse(question.answer)//将答案转换为js对象
 			}
+      console.log('question:', question)
 			//显示对手的答题状态
-			if (res.choicePlayer1[0] !== that.data.userInfo_me.openId) {
+			if (res.choicePlayer1[0] !== that.data.userInfo_me.openId) {//choicePlayer1是对手
 				that.setData({
 					status_users_others: {
 						openId: res.choicePlayer1[0],
@@ -106,7 +108,7 @@ Page({
 					score_others: res.choicePlayer1[3],//对手总分单独拎出来，不更新
 					animate_rightAnswer: 'right',//显示正确答案
 				})
-			} else {
+			} else {//choicePlayer2是对手
 				that.setData({
 					status_users_others: {
 						openId: res.choicePlayer2[0],
@@ -119,6 +121,7 @@ Page({
 			}
 
 			clearTimeout(getNextQuestions)
+      //question已经包括所有的题目了，比如10道
 			if (Object.getOwnPropertyNames(question).length) {
 				getNextQuestions = setTimeout(function () { //先等待2s查看对方的选择状态，再开始下一题
 					reset(that)//运行重置函数  
@@ -138,7 +141,8 @@ Page({
 					}
 					else {
 						that.setData({
-							game_over: true
+							game_over: true,
+              win: 2
 						})
 					}
 					//将当前用户的比赛结果发送给服务器
